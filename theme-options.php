@@ -1,6 +1,6 @@
 <?php
 /*
-Plugin Name: Aragorn - Rodeur SOE
+Plugin Name: Galadrielle
 Description: Améliore le référencement et le partage sur les réseaux sociaux..
 Version: 1.0
 Author: Stephen DELETANG
