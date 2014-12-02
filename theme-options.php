@@ -1,5 +1,11 @@
 <?php
-
+/*
+Plugin Name: Aragorn - Rodeur SOE
+Description: Améliore le référencement et le partage sur les réseaux sociaux..
+Version: 1.0
+Author: Stephen DELETANG
+Copyright 2014 Stephen DELETANG
+*/
 
 add_action( 'admin_menu', 'MaintenanceSettings' );
 
