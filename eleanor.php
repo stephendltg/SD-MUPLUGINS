@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Eleanor - Noblesse
-Description: Adapte votre site à votre utilisation.
+Description: Adapte votre site Back-End.
 Version: 1.0
 Author: Stephen DELETANG
 Copyright 2014 Stephen DELETANG
@@ -10,9 +10,9 @@ Copyright 2014 Stephen DELETANG
 defined('ABSPATH') or die('Vous avez bien fait de venir. Vous entendrez aujourd\' hui tout ce qu\'il vous est n&eacute;cessaire de savoir pour comprendre les desseins de l\'ennemi.'); 
 	
 
-/*** Parametrage des comptes utilisateurs----------------------------------------*/
-add_filter('user_contactmethods','modify_user_contact_methods',10,1);	// add facebook and twitter account to user profil
-function modify_user_contact_methods($user_contact) {
+/*** PARAMETRAGE DES COMPTES UTILISATEURS ----------------------------------------*/
+add_filter('user_contactmethods','_eleanor_modify_user_contact_methods',10,1);	// add facebook and twitter account to user profil
+function _eleanor_modify_user_contact_methods($user_contact) {
 	// $user_contact['skype'] = __('Skype'); 
 	// $user_contact['twitter'] = __('Twitter');
 	// $user_contact['facebook'] = __('Facebook');
@@ -22,75 +22,109 @@ function modify_user_contact_methods($user_contact) {
 	return $user_contact;
 }
 
-
-/*** Supprimer champ personnalisé sur post de type page et article ----------------------------------------*/
-function baw_remove_custom_field_meta_boxes() {
-    remove_post_type_support( 'post','custom-fields' );
-    remove_post_type_support( 'page','custom-fields' );
-}
-add_action('init','baw_remove_custom_field_meta_boxes');
-
-
-/*** Modifier liens page wp-login ----------------------------------------*/
-add_filter( 'login_headerurl', 'custom_login_url' );// Make admin link point to the home of the site
-function custom_login_url() {
-	return home_url( '/' );
-}
-add_filter( 'login_headertitle', 'custom_login_title' );// Change alt title of admin logo to use blog name
-function custom_login_title() {
-	return get_option( 'blogname' );
+/*** SUPPRESSION DES COMMENTAIRES ( 'page' ou 'post') ----------------------------------------*/
+add_filter('comments_open', '_eleanor_comments_closed', 10, 2);
+function _eleanor_comments_closed( $open, $post_id ) {
+	$post = get_post( $post_id );
+	if ('page' == $post->post_type)
+	$open = false;
+	return $open;
 }
 
-/*** Affiche options de la BDD ( evites d'utiliser PHP Admin , mais attention !) ----------------------------------------*/
-// add_action('admin_menu', 'add_all_general_settings_link'); 
-function add_all_general_settings_link() {  
-    add_options_page(__('All Settings'), __('All Settings'), 'administrator', 'options.php');  
-}  
+/*** AUTORISER SHORTCODE DANS WIDGET ----------------------------------------*/ 
+if ( !is_admin() ) { add_filter ('widget_text','do_shortcode'); }
 
+/*** MODIFIER URL DU HEADER LOGIN ----------------------------------------*/
+add_filter( 'login_headerurl', create_function('', "return home_url('/');") );
 
+/*** MODIFIER TITRE HEADER LOGIN ----------------------------------------*/ 
+add_filter( 'login_headertitle', create_function('', "return get_option( 'blogname' );") );
+ 
 /*** NETTOYAGE INTERFACE ADMIN ----------------------------------------*/
-		
-// add_action('admin_menu','remove_dashboard_widgets');// nettoyer dashboard widgets	
-// add_action('admin_menu', 'delete_menu_items');// deleting menu items from admin area
-// add_action( 'admin_menu', 'delete_submenu_page', 999 ); // deleting submenu page from admin aera
-// add_filter('manage_posts_columns', 'custom_post_columns');// remove column entries from list of posts
-// add_filter('manage_pages_columns', 'custom_pages_columns');// remove column entries from list of page
-// add_action('wp_before_admin_bar_render', 'remove_item_admin_bar' );// Nettoyer the admin bar
-// add_action('widgets_init', 'unregister_default_widgets', 11);// remove widgets from the widget page
-// add_filter( 'contextual_help', 'remove_help_tabs', 999, 3 ); // Enlever les options d'écrans d'aide
-// add_filter('screen_options_show_screen', 'remove_screen_options', 10, 2); // // Enlever les options d'écrans "option d'écran"
-// add_action('wp_dashboard_setup', 'add_dashboard_widgets' ); // Ajouter un widget sur Dashboard
-// add_action('admin_init','remove_dolly');// remove the hello dolly plugin
-
-// add_filter('show_admin_bar', '__return_false'); // Cacher la barre d'outils a tous les utilisateurs meme admin
-// add_action('init','_Eleanor_remove_toolsbar'); // Cacher la barre d'outils sauf administrateur
-function _Eleanor_remove_toolsbar(){
-	if (!current_user_can('administrator')) { add_filter('show_admin_bar', '__return_false'); }
-}
+add_action( 'admin_menu', create_function('', "remove_filter( 'update_footer', 'core_update_footer' );") ); // on supprime le numero version WP dans footer admin
+add_filter('admin_footer_text', '_eleanor_remove_footer_admin'); // modifier texte dans footer admin
+add_filter( 'contextual_help', '_eleanor_remove_help', 999, 3 ); // Supprimer menu aide dans admin 
+add_filter('screen_options_show_screen', '__return_false'); // Supprimer Option d'écran
+add_action('wp_dashboard_setup', '_eleanor_remove_dashboard_widgets' ); // Nettoyage tableau de bord
+add_action('wp_dashboard_setup', '_eleanor_add_dashboard_widgets' ); // Ajouter un widget sur Tableau de bord
+// add_action('admin_menu', '_eleanor_delete_menu_items');// Supprimer objet du menu de l'admin
+// add_action( 'admin_menu', '_eleanor_delete_submenu_page', 999 ); // deleting submenu page from admin aera
+add_filter('manage_posts_columns', '_eleanor_custom_post_columns');// remove column entries from list of posts
+add_filter('manage_pages_columns', '_eleanor_custom_pages_columns');// remove column entries from list of page
+add_action('admin_bar_menu', '_eleanor_remove_item_admin_bar' , 999);// Nettoyer the admin bar
+add_filter( 'pre_get_shortlink', '__return_empty_string' ); // Retirer les liens courts
+add_filter( 'media_view_strings', '_eleanor_custom_media_uploader' ); // Retirer item dans "ajouter media"
+add_filter( 'widget_meta_poweredby', '__return_empty_string', 10 ); // Supprimer liens vers wordpress du widget meta.
+add_filter( 'widget_title', '__return_empty_string'); // Supprimer le titre du widget meta.
+add_filter( 'register', '__return_empty_string' ); // Supprimer "admin. site " du widget meta.
+// add_action('widgets_init', '_eleanor_unregister_default_widgets', 11);// remove widgets from the widget page
+add_action('admin_head', '_eleanor_admin_color_scheme'); // Limiter le schema couleur de la page profil.
+add_filter('tiny_mce_before_init', '_eleanor_tiny_full_editor'); // Améliore l'affichage de l'éditeur.
+add_filter( 'upload_mimes', '_eleanor_add_mime_types' ); // Ajout support SVG pour les media.
+add_action('admin_menu','_eleanor_remove_custom_field_meta_boxes'); // Supprimer champ personnalisé sur post de type page et article ainsi que plusieurs metabox.
 
 
 /* LISTES DES APPELS FONCTIONS NETTOYAGE INTERFACE ADMIN */
 
+
+/*** Modifier texte dans footer admin ----------------------------------------*/
+if( !function_exists('_eleanor_remove_footer_admin'))  {
+	function _eleanor_remove_footer_admin(){
+		return '<span>Un site développé par DELETANG Stéphen</span>';
+	}
+}
+
+/*----------------------------------------------------------------------*/
+
+/*** Supprime l'onglet aide dans la partie admin ----------------------------------------*/
+if( !function_exists('_eleanor_remove_help'))  {
+	function _eleanor_remove_help( $old_help, $screen_id, $screen ){
+		$screen->remove_help_tabs();
+	    return $old_help;
+	}
+}
+
+/*----------------------------------------------------------------------*/
+
 	
-/*** cleaning up the dashboard- ----------------------------------------*/
-if( !function_exists('remove_dashboard_widgets'))  {
-	function remove_dashboard_widgets(){
-		remove_meta_box('dashboard_right_now','dashboard','core');// right now overview box
-		remove_meta_box('dashboard_incoming_links','dashboard','core');// incoming links box
-		remove_meta_box('dashboard_quick_press','dashboard','core');// quick press box
-		remove_meta_box('dashboard_plugins','dashboard','core');// new plugins box
-		remove_meta_box('dashboard_recent_drafts','dashboard','core');// recent drafts box
-		remove_meta_box('dashboard_recent_comments','dashboard','core');// recent comments box
-		remove_meta_box('dashboard_primary','dashboard','core');// wordpress development blog box
-		remove_meta_box('dashboard_secondary','dashboard','core');// other wordpress news box
+/*** Nettoyage des widget du tableau de bord ----------------------------------------*/
+if( !function_exists('_eleanor_remove_dashboard_widgets'))  {
+	function _eleanor_remove_dashboard_widgets(){
+		global $wp_meta_boxes;
+		unset($wp_meta_boxes['dashboard']['side']['core']['dashboard_quick_press']);
+		unset($wp_meta_boxes['dashboard']['normal']['core']['dashboard_activity']);
+		unset($wp_meta_boxes['dashboard']['normal']['core']['dashboard_incoming_links']);
+		unset($wp_meta_boxes['dashboard']['normal']['core']['dashboard_right_now']);
+		unset($wp_meta_boxes['dashboard']['normal']['core']['dashboard_plugins']);
+		unset($wp_meta_boxes['dashboard']['normal']['core']['dashboard_recent_drafts']);
+		unset($wp_meta_boxes['dashboard']['normal']['core']['dashboard_recent_comments']);
+		unset($wp_meta_boxes['dashboard']['side']['core']['dashboard_primary']);
+		unset($wp_meta_boxes['dashboard']['side']['core']['dashboard_secondary']);	
+
 	}
 }
 /*----------------------------------------------------------------------*/
 
+/*** Ajouter un widget dans le tableau de bord- ----------------------------------------*/
+function _eleanor_dashboard_widget_function() {
+		echo "
+		<ul>
+		<li>Date de realisation : Avril 2014</li>
+		<li>Auteurs : Stéphen DELETANG</li>
+		<li>Web developper : <a href='mailto:s.deletang@laposte.net'>Stephen DELETANG</a></li>
+		</ul>
+		";
+}
+if( !function_exists('_eleanor_add_dashboard_widgets'))  {
+	function _eleanor_add_dashboard_widgets() {
+		wp_add_dashboard_widget('wp_dashboard_widget', 'Informations techniques', '_eleanor_dashboard_widget_function');
+	}
+}
+/*----------------------------------------------------------------------*/
 
 /* Remove some menus froms the admin area*/
-if( !function_exists('delete_menu_items'))  {
-	function delete_menu_items() {
+if( !function_exists('_eleanor_delete_menu_items'))  {
+	function _eleanor_delete_menu_items() {
 	
 	/*** Remove menu http://codex.wordpress.org/Function_Reference/remove_menu_page 
 	syntaxe : remove_menu_page( $menu_slug )	**/
@@ -108,8 +142,8 @@ if( !function_exists('delete_menu_items'))  {
 	}
 }
 
-if( !function_exists('delete_submenu_page'))  {
-function delete_submenu_page() {
+if( !function_exists('_eleanor_delete_submenu_page'))  {
+function _eleanor_delete_submenu_page() {
 	remove_submenu_page( 'edit.php', 'edit.php' ); //Menu Tous les articles
 	remove_submenu_page( 'edit.php', 'post-new.php' ); //Menu Ajouter article
 	remove_submenu_page( 'edit.php', 'edit-tags.php?taxonomy=category' ); //Menu Catégorie
@@ -148,8 +182,8 @@ function delete_submenu_page() {
 syntaxe : unset($defaults['columnID']);	*/
 
 /** remove column entries from posts **/
-if( !function_exists('custom_post_columns'))  {
-	function custom_post_columns($defaults) {
+if( !function_exists('_eleanor_custom_post_columns'))  {
+	function _eleanor_custom_post_columns($defaults) {
 		unset($defaults['comments']);// comments 
 		unset($defaults['author']);// authors
 		unset($defaults['tags']);// tag 
@@ -160,8 +194,8 @@ if( !function_exists('custom_post_columns'))  {
 }
 
 /** remove column entries from pages **/
-if( !function_exists('custom_pages_columns'))  {
-	function custom_pages_columns($defaults) {
+if( !function_exists('_eleanor_custom_pages_columns'))  {
+	function _eleanor_custom_pages_columns($defaults) {
 		unset($defaults['comments']);// comments 
 		unset($defaults['author']);// authors
 		unset($defaults['date']);	// date 
@@ -174,8 +208,8 @@ if( !function_exists('custom_pages_columns'))  {
 /** remove widgets from the widget page ------------------------------------*/
 /* Credits : http://wpmu.org/how-to-remove-default-wordpress-widgets-and-clean-up-your-widgets-page/ 
 uncomment what you want to remove	*/
-if( !function_exists('unregister_default_widgets'))  {
-	 function unregister_default_widgets() {
+if( !function_exists('_eleanor_unregister_default_widgets'))  {
+	 function _eleanor_unregister_default_widgets() {
 		unregister_widget('WP_Widget_Pages');
 		unregister_widget('WP_Widget_Calendar');
 		unregister_widget('WP_Widget_Archives');
@@ -190,14 +224,15 @@ if( !function_exists('unregister_default_widgets'))  {
 		unregister_widget('WP_Widget_Tag_Cloud');
 		unregister_widget('WP_Nav_Menu_Widget');
 		unregister_widget('Twenty_Eleven_Ephemera_Widget');
+		unregister_widget('Twenty_Fourteen_Ephemera_Widget');
+
 	 }
 }
 
-/****** removings items froms admin bars 
+/**removings items froms admin bars 
 use the last part of the ID after "wp-admin-bar-" to add some menu to the list	exemple for comments : id="wp-admin-bar-comments" so the id to use is "comments"	***********/
-if( !function_exists('remove_item_admin_bar'))  {
-	function remove_item_admin_bar() {
-	global $wp_admin_bar;
+if( !function_exists('_eleanor_remove_item_admin_bar'))  {
+	function _eleanor_remove_item_admin_bar($wp_admin_bar) {
 		$wp_admin_bar->remove_menu('comments'); //remove comments
 		$wp_admin_bar->remove_menu('wp-logo'); //remove the whole wordpress logo, help etc part
     	$wp_admin_bar->remove_menu('about'); // A propos de WordPress
@@ -205,71 +240,72 @@ if( !function_exists('remove_item_admin_bar'))  {
     	$wp_admin_bar->remove_menu('documentation'); // Documentation
     	$wp_admin_bar->remove_menu('support-forums');  // Forum de support
     	$wp_admin_bar->remove_menu('feedback'); // Remarque
-   		$wp_admin_bar->remove_menu('site-name'); // Nom du site
+   		// $wp_admin_bar->remove_menu('site-name'); // Nom du site
     	$wp_admin_bar->remove_menu('updates'); // Icone mise à jour
 		$wp_admin_bar->remove_menu('new-content'); // bouton créer		
 	}
 }
+/*-----------------------------------------------------------------------**/
 
+/** Supprimer items dans "ajouter media" depuis edition post ------------------------------------*/
+if( !function_exists('_eleanor_custom_media_uploader'))  {
+	function _eleanor_custom_media_uploader( $strings ) {
+		//unset( $strings['insertMediaTitle'] ); //Insert Media
+		//unset( $strings['uploadFilesTitle'] ); //Upload Files
+		//unset( $strings['mediaLibraryTitle'] ); //Media Library
+		unset( $strings['createGalleryTitle'] ); //Create Gallery
+		//unset( $strings['setFeaturedImageTitle'] ); //Set Featured Image
+		unset( $strings['insertFromUrlTitle'] ); //Insert from URL
+		return $strings;
+	}
+}
 /*-----------------------------------------------------------------------**/
 
 /** WordPress user profil cleanups	------------------------------------*/
-	
-/* remove the color scheme options */
-if( !function_exists('admin_color_scheme'))  {
-		function admin_color_scheme() {
+	if( !function_exists('_eleanor_admin_color_scheme'))  {
+	function _eleanor_admin_color_scheme() {
 		global $_wp_admin_css_colors;
 		$_wp_admin_css_colors = 0;
 	}
 }
+/*----------------------------------------------------------------------- **/
 
-add_action('admin_head', 'admin_color_scheme');
-
-
+/** Ajouter deuxième ligne de l'editeur Tiny MCE	------------------------------------*/
+if( !function_exists('_eleanor_tiny_full_editor'))  {
+	function _eleanor_tiny_full_editor($in) {
+		$in['wordpress_adv_hidden'] = FALSE; // activer la deuxième ligne
+		$in['block_formats'] = "Paragraph=p; Heading 3=h3; Heading 4=h4; Heading 5=h5; Heading 6=h6"; // Limiter le format text
+		return $in;
+	}
+}
 /*----------------------------------------------------------------------- **/
 
 
-
-/** Enlever les options d'écrans	------------------------------------*/
-if( !function_exists('remove_help_tabs'))  {
-	function remove_help_tabs($old_help, $screen_id, $screen){
-    	$screen->remove_help_tabs();
-    	return $old_help;
+/** Ajouter deuxième ligne de l'editeur Tiny MCE	------------------------------------*/	
+if( !function_exists('_eleanor_add_mime_types'))  {
+	function _eleanor_add_mime_types( $mimes ){
+		$mimes['svg'] = 'image/svg+xml';
+		return $mimes;
 	}
 }
-if( !function_exists('remove_screen_options'))  {
-	function remove_screen_options($display_boolean, $wp_screen_object){
-  		$blacklist = array('post.php', 'post-new.php', 'index.php', 'edit.php','upload.php','edit-comments.php','nav-menus.php','edit-tags.php','users.php','admin.php');
-  		if (in_array($GLOBALS['pagenow'], $blacklist)) {
-    		$wp_screen_object->render_screen_layout();
-    		$wp_screen_object->render_per_page_options();
-    		return false;
-  		} else {
-    	return true;
-  		}
-	}
-}
-
 /*----------------------------------------------------------------------- **/
 
-
-/** Ajouter un widget sur dashboard	------------------------------------*/
-function dashboard_widget_function() {
-		echo "
-		<ul>
-		<li>Date de realisation : Avril 2014</li>
-		<li>Auteurs : Stéphen DELETANG</li>
-		<li>Web developper : <a href='mailto:s.deletang@laposte.net'>Stephen DELETANG</a></li>
-		</ul>
-		";
-}
-if( !function_exists('add_dashboard_widgets'))  {
-	function add_dashboard_widgets() {
-		wp_add_dashboard_widget('wp_dashboard_widget', 'Informations techniques', 'dashboard_widget_function');
+/** upprimer champ personnalisé sur post de type page et article ainsi que plusieurs metabox 	------------------------------------*/	
+if( !function_exists('_eleanor_remove_custom_field_meta_boxes'))  {
+	function _eleanor_remove_custom_field_meta_boxes() {
+	  remove_post_type_support( 'post','custom-fields' );
+	  remove_post_type_support( 'page','custom-fields' );
+	  remove_meta_box('linktargetdiv', 'link', 'normal');
+	  remove_meta_box('linkxfndiv', 'link', 'normal');
+	  remove_meta_box('linkadvanceddiv', 'link', 'normal');
+	  remove_meta_box('trackbacksdiv', 'post', 'normal');
+	  remove_meta_box('commentstatusdiv', 'post', 'normal');
+	  remove_meta_box('commentsdiv', 'post', 'normal');
+	  remove_meta_box('revisionsdiv', 'post', 'normal');
+	  remove_meta_box('authordiv', 'post', 'normal');
+	  remove_meta_box('sqpt-meta-tags', 'post', 'normal');
 	}
 }
-
 /*----------------------------------------------------------------------- **/
-
 
 ?>
